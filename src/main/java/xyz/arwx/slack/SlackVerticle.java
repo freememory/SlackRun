@@ -6,6 +6,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 import xyz.arwx.SlackRunBot;
 import xyz.arwx.config.SlackConfig;
+import xyz.arwx.strava.StravaHandler;
 import xyz.arwx.util.Json;
 
 import java.util.HashMap;

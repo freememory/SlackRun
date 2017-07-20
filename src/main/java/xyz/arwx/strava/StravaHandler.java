@@ -1,4 +1,4 @@
-package xyz.arwx.slack;
+package xyz.arwx.strava;
 
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpClientOptions;
@@ -9,6 +9,8 @@ import xyz.arwx.async.AsyncTransaction;
 import xyz.arwx.async.AsyncWork;
 import xyz.arwx.config.SlackConfig;
 import xyz.arwx.config.StravaConfig;
+import xyz.arwx.slack.SlackVerticle;
+import xyz.arwx.slack.SlashCommandResponse;
 import xyz.arwx.util.Json;
 
 import java.text.MessageFormat;
@@ -18,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 
 import static io.vertx.core.http.HttpMethod.GET;
+import static xyz.arwx.strava.Units.UnitType.Imperial;
 
 /**
  * Created by macobas on 19/07/17.
@@ -62,34 +65,43 @@ public class StravaHandler implements Handler<JsonObject>
         JsonObject clubInfo = result.getJsonObject("clubInfo").getJsonObject("body");
         JsonArray clubLeaderBoard = result.getJsonObject("clubLb").getJsonObject("body").getJsonArray("data");
 
+        String text = request.getString("text");
+        Units uconv = Units.of(text.toLowerCase().contains("murica") ? Imperial : Units.UnitType.Metric);
+
         response.responseUrl = request.getString("response_url");
         StringBuffer responseText = new StringBuffer();
         responseText.append(String.format("<http://www.strava.com/clubs/%s|%s>: %s club with %d members\n", clubInfo.getString("url"), clubInfo.getString("name"),
                 clubInfo.getString("sport_type"),
                 clubInfo.getInteger("member_count")));
-        responseText.append(String.format("%d members on the leaderboard, ranging from %.2f km - %.2f km", clubLeaderBoard.size(),
-                clubLeaderBoard.getJsonObject(clubLeaderBoard.size() - 1).getDouble("distance") / 1000., clubLeaderBoard.getJsonObject(0).getDouble("distance") / 1000.));
+        responseText.append(String.format("%d members on the leaderboard, ranging from %.2f %s - %.2f %s", clubLeaderBoard.size(),
+                uconv.getDistance(clubLeaderBoard.getJsonObject(clubLeaderBoard.size() - 1).getDouble("distance")), uconv.distanceUnit().abbrev(),
+                uconv.getDistance(clubLeaderBoard.getJsonObject(0).getDouble("distance")), uconv.distanceUnit().abbrev()));
 
         StringBuffer lbTxt = new StringBuffer();
         for(int i = 0; i < Math.min(clubLeaderBoard.size(), 10); i++)
         {
             JsonObject lbEntry = clubLeaderBoard.getJsonObject(i);
             Duration d = Duration.ofSeconds(lbEntry.getInteger("moving_time"));
-            Duration perK = Duration.ofSeconds(new Double(lbEntry.getInteger("moving_time") / ( lbEntry.getDouble("distance") / 1000. )).longValue());
+            Duration perK = Duration.ofSeconds(new Double(lbEntry.getInteger("moving_time") / uconv.getDistance(lbEntry.getDouble("distance"))).longValue());
 
-            lbTxt.append(String.format("%d. *%s %s*: %.2f km (^%.2f m) in %s (%s/km)\n",
+            lbTxt.append(String.format("%d. *%s %s*: %.2f %s (^%.2f %s) in %s (%s/%s)\n",
                     i + 1,
-                    lbEntry.getString("athlete_firstname"), lbEntry.getString("athlete_lastname"), lbEntry.getDouble("distance") / 1000.,
-                    lbEntry.getDouble("elev_gain"),
+                    lbEntry.getString("athlete_firstname"), lbEntry.getString("athlete_lastname"), uconv.getDistance(lbEntry.getDouble("distance")),
+                    uconv.distanceUnit().abbrev(),
+                    uconv.getElevation(lbEntry.getDouble("elev_gain")),
+                    uconv.elevUnit().abbrev(),
                     String.format("%d:%02d:%02d",
                             d.toHours(), d.minusHours(d.toHours()).toMinutes(),
                             d.minusMinutes(d.toMinutes()).getSeconds()),
-                    String.format("%d:%02d", perK.toMinutes(), perK.minusMinutes(perK.toMinutes()).getSeconds())));
+                    String.format("%d:%02d", perK.toMinutes(), perK.minusMinutes(perK.toMinutes()).getSeconds()),
+                    uconv.distanceUnit().abbrev()));
         }
 
         response.responseText = responseText.toString();
         response.attachments.add(new HashMap<String, Object>() {{
             put("color", "#36a64f");
+            put("author_icon", clubInfo.getString("profile_medium"));
+            put("author_name", "Top 10 Leaders" + (uconv.toType() == Imperial ? " (of FREEDOM - FUCK YEAH!)" : ""));
             put("text", lbTxt.toString());
             put("mrkdwn_in", new ArrayList<String>() {{
                 add("text");
