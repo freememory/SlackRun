@@ -21,6 +21,7 @@ import java.util.List;
 
 import static io.vertx.core.http.HttpMethod.GET;
 import static xyz.arwx.strava.Units.UnitType.Imperial;
+import static xyz.arwx.strava.Units.UnitType.Metric;
 
 /**
  * Created by macobas on 19/07/17.
@@ -66,7 +67,7 @@ public class StravaHandler implements Handler<JsonObject>
         JsonArray clubLeaderBoard = result.getJsonObject("clubLb").getJsonObject("body").getJsonArray("data");
 
         String text = request.getString("text");
-        Units uconv = Units.of(text.toLowerCase().contains("murica") ? Imperial : Units.UnitType.Metric);
+        Units uconv = Units.of(text != null && text.toLowerCase().contains("murica") ? Imperial : Metric);
 
         response.responseUrl = request.getString("response_url");
         StringBuffer responseText = new StringBuffer();
