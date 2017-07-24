@@ -7,4 +7,5 @@ public class MasterConfig
 {
     public StravaConfig stravaConfig;
     public SlackConfig slackConfig;
+    public MailConfig mailConfig;
 }

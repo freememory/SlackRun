@@ -8,4 +8,6 @@ public class SlackConfig
     public String clientId;
     public String clientSecret;
     public String verificationToken;
+    public String oauthToken;
+    public String webhookUrl;
 }
