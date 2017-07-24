@@ -13,14 +13,14 @@ import xyz.arwx.slack.SlackVerticle;
 import xyz.arwx.slack.SlashCommandResponse;
 import xyz.arwx.util.Json;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import static xyz.arwx.strava.Units.UnitType.Imperial;
 
 /**
  * Created by macobas on 23/07/17.

@@ -27,9 +27,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/**
- * Created by macobas on 05/07/17.
- */
 public class MailVerticle extends AbstractVerticle
 {
     public static final  String OutboundAddress = MailVerticle.class.getName() + ".NewMail";
