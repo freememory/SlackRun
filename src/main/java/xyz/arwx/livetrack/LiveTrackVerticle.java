@@ -40,62 +40,16 @@ public class LiveTrackVerticle extends AbstractVerticle
         slackUserMap = vertx.sharedData().getLocalMap(SlackVerticle.SlackUserMap);
     }
 
+    private List<LiveTrackUser> runningUsers()
+    {
+        return nickToUserMap.values().stream().filter(l -> l.inProgress()).collect(Collectors.toList());
+    }
+
     public void onSlashCommand(Message<JsonObject> slashCommandMsg)
     {
         JsonObject slashCommand = slashCommandMsg.body();
         String text = slashCommand.getString("text");
-        if(text == null || !text.toLowerCase().equals("help"))
-        {
-            boolean all = text == null || text.length() == 0;
-            if(!all)
-            {
-                LiveTrackUser ltu = nickToUserMap.get(text);
-                if (ltu == null)
-                {
-                    SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-                    scr.responseText = "I don't know who that user is - try again.";
-                    scr.responseType = SlashCommandResponse.ResponseType.Ephemeral;
-                    scr.send(vertx);
-                }
-                else
-                {
-                    String shortText = getSessionInfoText(ltu);
-                    String tlText = getTrackLogText(ltu);
-                    SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-                    scr.responseText = shortText;
-                    scr.attachments.add(new HashMap<String, Object>() {{
-                        put("text", tlText);
-                    }});
-
-                    scr.send(vertx);
-                }
-            }
-            else
-            {
-                List<LiveTrackUser> users = nickToUserMap.values().stream().filter(l->l.announced).collect(Collectors.toList());
-                SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-                scr.responseText = String.format("%d users total currently running", users.size());
-
-                HashMap<String, Object> attachments = new HashMap<>();
-                attachments.put("color", "#36a64f");
-                StringBuffer runnersTxt = new StringBuffer();
-
-                for(int i = 0; i < users.size(); i++)
-                {
-                    LiveTrackUser u = users.get(i);
-                    String shortText = getSessionInfoText(u);
-                    runnersTxt.append(String.format("%d. %s\n", i + 1, shortText));
-                }
-
-                attachments.put("text", runnersTxt.toString());
-                scr.attachments.add(attachments);
-                scr.send(vertx);
-            }
-
-            return;
-        }
-
-        if(text.toLowerCase().equals("help"))
+        if(text != null && text.toLowerCase().equals("help"))
         {
             SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
             String email = "challenge.runbot+" + slashCommand.getString("user_name") + "@gmail.com";
@@ -112,11 +66,58 @@ public class LiveTrackVerticle extends AbstractVerticle
             vertx.eventBus().publish(SlackVerticle.OutboundSlashCommand, Json.objectToJsonObject(scr));
             return;
         }
+
+        if(text == null || text.length() == 0)
+        {
+            List<LiveTrackUser> users = runningUsers();
+            SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
+            scr.responseText = String.format("%d users total currently running", users.size());
+
+            HashMap<String, Object> attachments = new HashMap<>();
+            attachments.put("color", "#36a64f");
+            StringBuffer runnersTxt = new StringBuffer();
+
+            for (int i = 0; i < users.size(); i++)
+            {
+                LiveTrackUser u = users.get(i);
+                String shortText = getSessionInfoText(u);
+                runnersTxt.append(String.format("%d. %s\n", i + 1, shortText));
+            }
+
+            attachments.put("text", runnersTxt.toString());
+            scr.attachments.add(attachments);
+            scr.send(vertx);
+
+            return;
+        } else
+        {
+            LiveTrackUser ltu = nickToUserMap.get(text);
+            if (ltu == null)
+            {
+                SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
+                scr.responseText = "I don't know who that user is - try again.";
+                scr.responseType = SlashCommandResponse.ResponseType.Ephemeral;
+                scr.send(vertx);
+            }
+            else
+            {
+                String shortText = getSessionInfoText(ltu);
+                String tlText = getTrackLogText(ltu);
+                SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
+                scr.responseText = shortText;
+                scr.attachments.add(new HashMap<String, Object>()
+                {{
+                    put("text", tlText);
+                }});
+
+                scr.send(vertx);
+            }
+        }
     }
 
     private String getTrackLogText(LiveTrackUser ltu)
     {
-        JsonObject md = ltu.lastTracklog.getJsonObject("metaData");
+        JsonObject md = ltu.trackLog().getJsonObject("metaData");
         Duration d = Duration.ofMillis(new Double(Double.parseDouble(md.getString("TOTAL_DURATION"))).longValue());
         Double distance = Double.parseDouble(md.getString("TOTAL_DISTANCE"));
         Double metersPerSec = Double.parseDouble(md.getString("SPEED"));
@@ -132,16 +133,18 @@ public class LiveTrackVerticle extends AbstractVerticle
 
     public String getSessionInfoText(LiveTrackUser user)
     {
-        long epochStart = user.sessionInfo.getLong("startTime") / 1000L;
+        long epochStart = user.sessionInfo().getLong("startTime") / 1000L;
         LocalDateTime ldt = LocalDateTime.ofEpochSecond(epochStart, 0, ZoneOffset.UTC);
         return String.format("<@%s|%s> activity titled <%s|%s> <!date^%d^Started {date_num} at {time_secs}|Started %s>",
-                user.userInfo.getString("userId"), user.userInfo.getString("nick"),
-                garminUrl("https://livetrack.garmin.com/session", user.sessionId, user.token),
-                user.sessionInfo.getString("sessionName"), epochStart, ldt.format(DateTimeFormatter.ISO_DATE_TIME));
+                user.userInfo().getString("userId"), user.userInfo().getString("nick"),
+                garminUrl("https://livetrack.garmin.com/session", user.sesh(), user.tok()),
+                user.sessionInfo().getString("sessionName"), epochStart, ldt.format(DateTimeFormatter.ISO_DATE_TIME));
     }
 
     public void onMonitorActivityTimer(Long timerId)
     {
+        // Cull the list of dead and done users
+        nickToUserMap.entrySet().removeIf(e->e.getValue().isDone());
         Set<String> nicks = nickToUserMap.keySet();
         nicks.forEach(this::updateActivityStatus);
         nicks.forEach(this::updateTracklog);
@@ -153,28 +156,16 @@ public class LiveTrackVerticle extends AbstractVerticle
         if (ltu == null)
             return;
 
-        vertx.createHttpClient(new HttpClientOptions().setSsl(true).setTrustAll(true))
-             .getAbs(apiUrl("trackLog", ltu.sessionId, ltu.token), resp -> {
-                 if (resp.statusCode() != 200)
-                     return;
-                 else
-                     resp.bodyHandler(buf -> this.handleTracklog(ltu, buf.toJsonArray()));
-             }).end();
+        ltu.updateTrackLog();
     }
 
-    private void handleTracklog(LiveTrackUser ltu, JsonArray objects)
-    {
-        JsonObject lastLog = objects.getJsonObject(objects.size() - 1);
-        ltu.lastTracklog = lastLog;
-    }
-
-    private String apiUrl(String service, String sessionId, String token)
+    public static String apiUrl(String service, String sessionId, String token)
     {
         String base = "https://livetrack.garmin.com/services";
         return garminUrl(String.format("%s/%s", base, service), sessionId, token);
     }
 
-    public String garminUrl(String base, String sessionId, String token)
+    public static String garminUrl(String base, String sessionId, String token)
     {
         return String.format("%s/%s/token/%s", base, sessionId, token);
     }
@@ -185,95 +176,8 @@ public class LiveTrackVerticle extends AbstractVerticle
         if(ltu == null)
             return;
 
-        vertx.createHttpClient(new HttpClientOptions().setSsl(true).setTrustAll(true))
-                .getAbs(apiUrl("session", ltu.sessionId, ltu.token), resp -> {
-                    if(resp.statusCode() != 200)
-                    {
-                        ltu.failedFetches++;
-                        if (ltu.failedFetches == 5)
-                            nickToUserMap.remove(nick);
-                    } else
-                        resp.bodyHandler(buf -> this.handleStatus(buf.toJsonObject(), ltu));
-                }).end();
+        ltu.updateStatus();
     }
-
-    private void handleStatus(JsonObject obj, LiveTrackUser user)
-    {
-        Long now = System.currentTimeMillis();
-        user.failedFetches = 0;
-        String status = obj.getString("sessionStatus");
-        user.sessionInfo = obj;
-        if(!status.equals("InProgress"))
-        {
-            nickToUserMap.remove(user.nick);
-            if(user.announced)
-                announceEnd(user);
-        }
-        else {
-            // 2 minutes grace for mistaken presses.
-            if(!user.announced && (now - user.timeCreated) > 2 * 60 * 1000)
-                announceStart(user);
-        }
-    }
-
-    public void announceStart(LiveTrackUser user)
-    {
-        String url = garminUrl("https://livetrack.garmin.com/session", user.sessionId, user.token);
-        vertx.eventBus().publish(SlackVerticle.OutboundAnnounce, new JsonObject()
-            .put("text", String.format("%s has started a LiveTrack activity! You can watch <%s|here>, or use /livetrack or /livetrack <nick> to monitor!", user.nick, url)));
-        user.announced = true;
-    }
-
-    public void announceEnd(LiveTrackUser user)
-    {
-        Duration d = Duration.ofMillis(user.sessionInfo.getInteger("endTime") - user.sessionInfo.getInteger("startTime"));
-        vertx.eventBus().publish(SlackVerticle.OutboundAnnounce, new JsonObject()
-                .put("text", String.format("<@%s|%s> has completed a LiveTrack activity!\nTotal time: %s, total distance: %.2f km",
-                        user.userInfo.getString("userId"),
-                        user.nick, String.format("%d:%02d:%02d",
-                                d.toHours(), d.minusHours(d.toHours()).toMinutes(),
-                                d.minusMinutes(d.toMinutes()).getSeconds()), Double.parseDouble(user.lastTracklog.getJsonObject("metaData").getString("TOTAL_DISTANCE")) / 1000.)));
-    }
-
-    public static class LiveTrackUser
-    {
-        String nick;
-        String sessionId;
-        String token;
-        int failedFetches = 0;
-
-        JsonObject userInfo;
-        JsonObject sessionInfo;
-        JsonObject lastTracklog;
-
-        Long timeCreated = System.currentTimeMillis();
-        boolean announced = false;
-
-        public LiveTrackUser nick(String nick)
-        {
-            this.nick = nick;
-            return this;
-        }
-
-        public LiveTrackUser sesh(String sessionId)
-        {
-            this.sessionId = sessionId;
-            return this;
-        }
-
-        public LiveTrackUser tok(String tok)
-        {
-            this.token = tok;
-            return this;
-        }
-
-        public LiveTrackUser userInfo(JsonObject ui)
-        {
-            this.userInfo = ui;
-            return this;
-        }
-    }
-
 
     public void onNewMail(Message<JsonObject> emailMsg)
     {
@@ -311,11 +215,15 @@ public class LiveTrackVerticle extends AbstractVerticle
         Pattern p = Pattern.compile("href=\"(?:http|https)://livetrack\\.garmin\\.com/session/(.*)/token/([^\"]*)\"");
         Matcher m = p.matcher(body);
         Set<String> urls = new HashSet<>();
-        LiveTrackUser ltu = new LiveTrackUser().nick(nick).userInfo(nickInfo);
+        String sesh = null, tok = null;
         while(m.find())
-            ltu.sesh(m.group(1)).tok(m.group(2));
+        {
+            sesh = m.group(1);
+            tok = m.group(2);
+        }
 
-        nickToUserMap.put(ltu.nick, ltu);
+        LiveTrackUser ltu = new LiveTrackUser(nick, nickInfo, sesh, tok);
+        nickToUserMap.put(ltu.nick(), ltu);
     }
 
     private JsonObject resolveNick(String nick)
