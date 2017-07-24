@@ -11,6 +11,35 @@ Currently the bot really only has two features:
 * /strava slash command: retrieves info and leaderboard of our Strava running group.
 * /livetrack slash command: retrieves info from Garmin's website for all currently tracked users.
 
+## Config
+Currently configured via slackrun.conf in resources/ however you can probably change the code
+to load from a file as well. I was just lazy.
+
+Configs are as follows, expecting the following args:
+* mail.json
+`{
+   "userName": "challenge.runbot@gmail.com",
+   "password": "password"
+   "host": "imap.gmail.com",
+   "port": 993,
+ }`
+* slack.json
+`{
+   "clientId": "123456789.122344",
+   "clientSecret": "abcdefabcdefabcdef",
+   "verificationToken": "0ABC1abclMGUNGF",
+   "oauthToken": "xoxp-blah-bloo-blee",
+   "webhookUrl": "https://hooks.slack.com/services/T12345/B12345/morestuff"
+ }`
+ * strava.json
+ `{
+   "accessToken": "SOOPERSEKRETTOKEN",
+   "defaultClubId": "223460" //this is the id of the club to post by default
+ }`
+
+For more information see package: `xyz.arwx.config`. All config JSONs are turned into POJOs
+using Jackson binding.
+
 ### Livetracking
 Livetracking is kind of interesting so it needs to be mentioned separately. If you set up your
 Garmin to e-mail the bot (challenge.runbot+<YOUR_SLACK_NICK>@gmail.com) when you start an
