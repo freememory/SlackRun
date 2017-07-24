@@ -20,12 +20,13 @@ import java.util.stream.Collectors;
 
 /**
  * Created by macobas on 17/07/17.
- *
+ * <p>
  * The AsyncTransaction represents a bundle of work. When it completes, it will call your callback.
  */
 public class AsyncTransaction
 {
     Logger logger = LoggerFactory.getLogger(AsyncTransaction.class);
+
     private class ExecutableTransaction extends AbstractVerticle
     {
         public void start()
@@ -35,7 +36,7 @@ public class AsyncTransaction
             logger.info("Created latch, size {}", latch.getCount());
             vx.executeBlocking(fut -> {
                 logger.info("ExecuteBlocking");
-                while(true)
+                while (true)
                 {
                     try
                     {
@@ -57,10 +58,10 @@ public class AsyncTransaction
                     finalResult.put(w.name, w.result);
                 });
 
-                List<AsyncWork> fails = workMap.values().stream().filter(w->w.isFailed).collect(Collectors.toList());
-                if(fails != null && fails.size() > 0 && failureCb != null)
+                List<AsyncWork> fails = workMap.values().stream().filter(w -> w.isFailed).collect(Collectors.toList());
+                if (fails != null && fails.size() > 0 && failureCb != null)
                     failureCb.handle(finalResult);
-                else if(completeCb != null)
+                else if (completeCb != null)
                     completeCb.handle(finalResult);
                 vx.eventBus().publish(txid(), new JsonObject().put("done", true));
             });
@@ -70,10 +71,10 @@ public class AsyncTransaction
         }
     }
 
-    private Map<String, AsyncWork> workMap = new HashMap<>();
-    private boolean isStarted = false;
+    private Map<String, AsyncWork> workMap   = new HashMap<>();
+    private boolean                isStarted = false;
     public Vertx vx;
-    private String txnId = UUID.randomUUID().toString();
+    private String                       txnId     = UUID.randomUUID().toString();
     private Map<String, MessageConsumer> consumers = new HashMap<>();
     private CountDownLatch latch;
     private String execId = "";
@@ -94,9 +95,9 @@ public class AsyncTransaction
     private void txMsgs(Message<JsonObject> msg)
     {
         JsonObject b = msg.body();
-        if(b.getBoolean("done") && execId.length() > 0)
+        if (b.getBoolean("done") && execId.length() > 0)
         {
-            vx.undeploy(execId, r->{
+            vx.undeploy(execId, r -> {
                 isStarted = false;
                 execId = "";
             });
@@ -140,12 +141,13 @@ public class AsyncTransaction
 
     public void onEach(Handler<JsonObject> eachCompleteCb, Handler<JsonObject> eachFailCb)
     {
-        this.eachCompleteCb = eachCompleteCb; this.eachFailCb = eachFailCb;
+        this.eachCompleteCb = eachCompleteCb;
+        this.eachFailCb = eachFailCb;
     }
 
     public void execute()
     {
-        if(!isStarted)
+        if (!isStarted)
         {
             isStarted = true;
             vx.deployVerticle(new ExecutableTransaction(), r -> {
@@ -156,7 +158,7 @@ public class AsyncTransaction
 
     public void addWork(AsyncWork work)
     {
-        if(!isStarted)
+        if (!isStarted)
         {
             work.txn = this;
             workMap.put(work.name, work);
@@ -186,7 +188,7 @@ public class AsyncTransaction
         w.isComplete = success;
         w.result = msg.body();
         Handler<JsonObject> eachCb = success ? eachCompleteCb : eachFailCb;
-        if(eachCb != null)
+        if (eachCb != null)
             eachCb.handle(w.result);
         logger.info("{} isComplete={}/isFailed={}", workName, w.isComplete, w.isFailed);
         latch.countDown();

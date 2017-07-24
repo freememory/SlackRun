@@ -5,8 +5,8 @@ package xyz.arwx.config;
  */
 public class MailConfig
 {
-    public String userName;
-    public String password;
-    public String host;
+    public String  userName;
+    public String  password;
+    public String  host;
     public Integer port;
 }

@@ -28,13 +28,13 @@ public class LiveTrackUser
     private String nick;
     private String sessionId;
     private String token;
-    private int failedFetches;
+    private int    failedFetches;
 
     private JsonObject userInfo;
     private JsonObject sessionInfo;
     private JsonObject lastTracklog;
 
-    Long    timeCreated;
+    Long timeCreated;
     private TrackStatus trackStatus;
 
     public LiveTrackUser(String nick, JsonObject userInfo, String sessionId, String token)
@@ -113,11 +113,11 @@ public class LiveTrackUser
     {
         SlackRunBot.vertx.createHttpClient(new HttpClientOptions().setSsl(true).setTrustAll(true))
                          .getAbs(apiUrl("trackLog", sessionId, token), resp -> {
-                 if (resp.statusCode() != 200)
-                     return;
-                 else
-                     resp.bodyHandler(buf -> handleTracklog(buf.toJsonArray()));
-             }).end();
+                             if (resp.statusCode() != 200)
+                                 return;
+                             else
+                                 resp.bodyHandler(buf -> handleTracklog(buf.toJsonArray()));
+                         }).end();
     }
 
     private void handleTracklog(JsonArray objects)
@@ -128,18 +128,19 @@ public class LiveTrackUser
 
     public void updateStatus()
     {
-        if(isDone())
+        if (isDone())
             return;
         SlackRunBot.vertx.createHttpClient(new HttpClientOptions().setSsl(true).setTrustAll(true))
-             .getAbs(apiUrl("session", sessionId, token), resp -> {
-                 if(resp.statusCode() != 200)
-                 {
-                     failedFetches++;
-                     if (failedFetches == 5)
-                         trackStatus = Dead;
-                 } else
-                     resp.bodyHandler(buf -> this.handleStatus(buf.toJsonObject()));
-             }).end();
+                         .getAbs(apiUrl("session", sessionId, token), resp -> {
+                             if (resp.statusCode() != 200)
+                             {
+                                 failedFetches++;
+                                 if (failedFetches == 5)
+                                     trackStatus = Dead;
+                             }
+                             else
+                                 resp.bodyHandler(buf -> this.handleStatus(buf.toJsonObject()));
+                         }).end();
     }
 
     public boolean isDone()
@@ -153,14 +154,15 @@ public class LiveTrackUser
         failedFetches = 0;
         String status = obj.getString("sessionStatus");
         sessionInfo = obj;
-        if(!status.equals("InProgress") && trackStatus == InProgress)
+        if (!status.equals("InProgress") && trackStatus == InProgress)
         {
             announceEnd();
             trackStatus = Done;
         }
-        else {
+        else
+        {
             // 2 minutes grace for mistaken presses.
-            if(trackStatus == StartedNotAnnounced && (now - timeCreated) >= 2 * 60 * 1000)
+            if (trackStatus == StartedNotAnnounced && (now - timeCreated) >= 2 * 60 * 1000)
                 announceStart();
         }
     }

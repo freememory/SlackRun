@@ -7,8 +7,6 @@ package xyz.arwx.mail;
 import com.sun.mail.imap.IMAPFolder;
 import com.sun.mail.imap.IMAPStore;
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.DeploymentOptions;
-import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.slf4j.Logger;
@@ -22,15 +20,14 @@ import javax.mail.event.MessageCountEvent;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMultipart;
 import java.io.IOException;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 public class MailVerticle extends AbstractVerticle
 {
     public static final  String OutboundAddress = MailVerticle.class.getName() + ".NewMail";
-    private static final Logger logger         = LoggerFactory.getLogger(MailVerticle.class);
+    private static final Logger logger          = LoggerFactory.getLogger(MailVerticle.class);
     private MailConfig config;
     private IdleThread idleRunner;
     private Thread     idleThread;
@@ -55,10 +52,14 @@ public class MailVerticle extends AbstractVerticle
         if (message.isMimeType("text/plain"))
         {
             result = message.getContent().toString();
-        } else if (message.isMimeType("text/html")) {
+        }
+        else if (message.isMimeType("text/html"))
+        {
             String html = (String) message.getContent();
             result += html;
-        } else if (message.isMimeType("multipart/*")) {
+        }
+        else if (message.isMimeType("multipart/*"))
+        {
             MimeMultipart mimeMultipart = (MimeMultipart) message.getContent();
             result = getTextFromMimeMultipart(mimeMultipart);
         }
@@ -67,19 +68,26 @@ public class MailVerticle extends AbstractVerticle
     }
 
     private String getTextFromMimeMultipart(
-            MimeMultipart mimeMultipart)  throws MessagingException, IOException{
+            MimeMultipart mimeMultipart) throws MessagingException, IOException
+    {
         String result = "";
         int count = mimeMultipart.getCount();
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < count; i++)
+        {
             BodyPart bodyPart = mimeMultipart.getBodyPart(i);
-            if (bodyPart.isMimeType("text/plain")) {
-                result +=  bodyPart.getContent();
+            if (bodyPart.isMimeType("text/plain"))
+            {
+                result += bodyPart.getContent();
                 break;
-            } else if (bodyPart.isMimeType("text/html")) {
+            }
+            else if (bodyPart.isMimeType("text/html"))
+            {
                 String html = (String) bodyPart.getContent();
                 result = html;
-            } else if (bodyPart.getContent() instanceof MimeMultipart){
-                result += getTextFromMimeMultipart((MimeMultipart)bodyPart.getContent());
+            }
+            else if (bodyPart.getContent() instanceof MimeMultipart)
+            {
+                result += getTextFromMimeMultipart((MimeMultipart) bodyPart.getContent());
             }
 
             result += "\n";
@@ -92,9 +100,9 @@ public class MailVerticle extends AbstractVerticle
         List<String> ret = new ArrayList<>();
         try
         {
-            for(Address addr : m.getAllRecipients())
+            for (Address addr : m.getAllRecipients())
             {
-                InternetAddress inaddr = (InternetAddress)addr;
+                InternetAddress inaddr = (InternetAddress) addr;
                 ret.add(inaddr.getAddress());
             }
         }
@@ -122,20 +130,21 @@ public class MailVerticle extends AbstractVerticle
         inbox.addMessageCountListener(new MessageCountAdapter()
         {
             @Override
-            public void messagesAdded(MessageCountEvent event) {
+            public void messagesAdded(MessageCountEvent event)
+            {
                 Message[] messages = event.getMessages();
                 for (Message message : messages)
                 {
                     try
                     {
                         JsonObject msg = new JsonObject()
-                                .put("from", ((InternetAddress)message.getFrom()[0]).getAddress())
+                                .put("from", ((InternetAddress) message.getFrom()[0]).getAddress())
                                 .put("to", new JsonArray(getToList(message)))
                                 .put("subject", message.getSubject())
                                 .put("body", getTextFromMessage(message));
                         vertx.eventBus().publish(MailVerticle.OutboundAddress, msg);
                     }
-                    catch (MessagingException|IOException e)
+                    catch (MessagingException | IOException e)
                     {
                         e.printStackTrace();
                     }
@@ -151,10 +160,10 @@ public class MailVerticle extends AbstractVerticle
 
     private static class IdleThread implements Runnable
     {
-        private Folder folder;
+        private Folder     folder;
         private MailConfig mailConfig;
-        private volatile boolean running = true;
-        private static final Logger logger = LoggerFactory.getLogger(IdleThread.class);
+        private volatile     boolean running = true;
+        private static final Logger  logger  = LoggerFactory.getLogger(IdleThread.class);
 
         IdleThread(Folder f, MailConfig mc)
         {
@@ -172,19 +181,25 @@ public class MailVerticle extends AbstractVerticle
         @Override
         public void run()
         {
-            while(running)
+            while (running)
             {
-                try {
+                try
+                {
                     ensureOpen();
                     logger.info("Enter idle");
                     ((IMAPFolder) folder).idle();
-                } catch (Exception e) {
+                }
+                catch (Exception e)
+                {
                     // something went wrong
                     // wait and try again
                     e.printStackTrace();
-                    try {
+                    try
+                    {
                         Thread.sleep(100);
-                    } catch (InterruptedException e1) {
+                    }
+                    catch (InterruptedException e1)
+                    {
                         // ignore
                     }
                 }
@@ -193,12 +208,16 @@ public class MailVerticle extends AbstractVerticle
 
         public void ensureOpen() throws MessagingException
         {
-            if (folder != null) {
+            if (folder != null)
+            {
                 Store store = folder.getStore();
-                if (store != null && !store.isConnected()) {
+                if (store != null && !store.isConnected())
+                {
                     store.connect(mailConfig.userName, mailConfig.password);
                 }
-            } else {
+            }
+            else
+            {
                 throw new MessagingException("Unable to open a null folder");
             }
 

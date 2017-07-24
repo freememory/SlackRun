@@ -1,8 +1,5 @@
 package xyz.arwx.strava;
 
-import io.vertx.core.json.JsonArray;
-import io.vertx.core.json.JsonObject;
-
 import static xyz.arwx.strava.Units.UnitType.Metric;
 
 /**
@@ -18,7 +15,7 @@ public class Units
 
     // Feet per meter
     public final double FeetPerMeter = 3.28084;
-    public final int FeetPerMile = 5280;
+    public final int    FeetPerMile  = 5280;
 
     public enum Unit
     {
@@ -28,18 +25,25 @@ public class Units
         Feet("ft");
 
         private String abbrev;
+
         Unit(String abbrev)
         {
             this.abbrev = abbrev;
         }
 
-        public String abbrev() { return abbrev; }
+        public String abbrev()
+        {
+            return abbrev;
+        }
     }
 
     UnitType fromType;
     UnitType toType;
 
-    public UnitType toType() { return toType; }
+    public UnitType toType()
+    {
+        return toType;
+    }
 
     public static Units of(UnitType toType)
     {
@@ -51,7 +55,7 @@ public class Units
 
     public Unit distanceUnit()
     {
-        switch(toType)
+        switch (toType)
         {
             case Imperial:
                 return Unit.Mile;
@@ -64,7 +68,7 @@ public class Units
 
     public Unit elevUnit()
     {
-        switch(toType)
+        switch (toType)
         {
             case Imperial:
                 return Unit.Feet;
@@ -77,10 +81,10 @@ public class Units
 
     public double getDistance(double inDist)
     {
-        switch(toType)
+        switch (toType)
         {
             case Imperial:
-                return (inDist * FeetPerMeter) / (double)FeetPerMile;
+                return (inDist * FeetPerMeter) / (double) FeetPerMile;
             case Metric:
                 return inDist / 1000.;
         }
@@ -90,7 +94,7 @@ public class Units
 
     public double getElevation(double inDist)
     {
-        switch(toType)
+        switch (toType)
         {
             case Imperial:
                 return inDist * FeetPerMeter;

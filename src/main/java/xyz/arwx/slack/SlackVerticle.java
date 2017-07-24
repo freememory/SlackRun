@@ -30,11 +30,11 @@ public class SlackVerticle extends AbstractVerticle
     private LocalMap<String, JsonObject> slackUserMap;
 
     // Requests come here
-    public static final String                           InboundSlashCommand = "Slack.Slash.In";
+    public static final String InboundSlashCommand  = "Slack.Slash.In";
     // Replies go here
     public static final String OutboundSlashCommand = "Slack.Slash.Out";
-    public static final String OutboundAnnounce = "Slack.Announce.Out";
-    public static final String SlackUserMap = "slack.users";
+    public static final String OutboundAnnounce     = "Slack.Announce.Out";
+    public static final String SlackUserMap         = "slack.users";
 
     public void start()
     {
@@ -62,11 +62,12 @@ public class SlackVerticle extends AbstractVerticle
         logger.info("Fetching users");
         vertx.createHttpClient(
                 new HttpClientOptions().setSsl(true).setTrustAll(true)).getAbs(apiUrl("users.list", config.oauthToken), response -> {
-           if(response.statusCode() != 200)
-               return;
-            else {
-               response.bodyHandler(buf -> this.updateUserMap(buf.toJsonObject()));
-           }
+            if (response.statusCode() != 200)
+                return;
+            else
+            {
+                response.bodyHandler(buf -> this.updateUserMap(buf.toJsonObject()));
+            }
         }).end();
 
     }
@@ -79,7 +80,7 @@ public class SlackVerticle extends AbstractVerticle
 
     private void updateUserMap(JsonObject userMap)
     {
-        if(userMap.getBoolean("ok") != true)
+        if (userMap.getBoolean("ok") != true)
             return;
 
         // Not bothering with pagination right now.
@@ -87,7 +88,7 @@ public class SlackVerticle extends AbstractVerticle
         logger.info("Processing user map, {} users total", memberList.size());
 
         memberList.forEach(member -> {
-            JsonObject mem = (JsonObject)member;
+            JsonObject mem = (JsonObject) member;
             JsonObject user = new JsonObject()
                     .put("nick", mem.getString("name"))
                     .put("realName", mem.getString("real_name"))

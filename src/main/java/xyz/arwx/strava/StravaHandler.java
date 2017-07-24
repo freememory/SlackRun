@@ -7,7 +7,6 @@ import io.vertx.core.json.JsonObject;
 import xyz.arwx.SlackRunBot;
 import xyz.arwx.async.AsyncTransaction;
 import xyz.arwx.async.AsyncWork;
-import xyz.arwx.config.SlackConfig;
 import xyz.arwx.config.StravaConfig;
 import xyz.arwx.slack.SlackVerticle;
 import xyz.arwx.slack.SlashCommandResponse;
@@ -17,7 +16,6 @@ import java.text.MessageFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 import static io.vertx.core.http.HttpMethod.GET;
 import static xyz.arwx.strava.Units.UnitType.Imperial;
@@ -49,13 +47,13 @@ public class StravaHandler implements Handler<JsonObject>
         AsyncTransaction txn = new AsyncTransaction(SlackRunBot.vertx);
         String clubUrl = clubUrl();
         txn.addWork(txn.httpWork(GET, clubUrl, new HttpClientOptions().setSsl(true).setTrustAll(true))
-                 .setBodyType(AsyncWork.HttpCall.BodyType.JSONOBJECT)
-                 .setName("clubInfo"));
+                       .setBodyType(AsyncWork.HttpCall.BodyType.JSONOBJECT)
+                       .setName("clubInfo"));
         txn.addWork(txn.httpWork(GET, clubLbUrl(), new HttpClientOptions().setSsl(true).setTrustAll(true))
-                 .setBodyType(AsyncWork.HttpCall.BodyType.JSONOBJECT)
-                 .setName("clubLb"));
+                       .setBodyType(AsyncWork.HttpCall.BodyType.JSONOBJECT)
+                       .setName("clubLb"));
 
-        AsyncWork.HttpCall lb = (AsyncWork.HttpCall)txn.getWorker("clubLb");
+        AsyncWork.HttpCall lb = (AsyncWork.HttpCall) txn.getWorker("clubLb");
         lb.getRequest().putHeader("Accept", "text/javascript");
         return txn;
     }
@@ -79,7 +77,7 @@ public class StravaHandler implements Handler<JsonObject>
                 uconv.getDistance(clubLeaderBoard.getJsonObject(0).getDouble("distance")), uconv.distanceUnit().abbrev()));
 
         StringBuffer lbTxt = new StringBuffer();
-        for(int i = 0; i < Math.min(clubLeaderBoard.size(), 10); i++)
+        for (int i = 0; i < Math.min(clubLeaderBoard.size(), 10); i++)
         {
             JsonObject lbEntry = clubLeaderBoard.getJsonObject(i);
             Duration d = Duration.ofSeconds(lbEntry.getInteger("moving_time"));
@@ -99,12 +97,14 @@ public class StravaHandler implements Handler<JsonObject>
         }
 
         response.responseText = responseText.toString();
-        response.attachments.add(new HashMap<String, Object>() {{
+        response.attachments.add(new HashMap<String, Object>()
+        {{
             put("color", "#36a64f");
             put("author_icon", clubInfo.getString("profile_medium"));
             put("author_name", "Top 10 Leaders" + (uconv.toType() == Imperial ? " (of FREEDOM - FUCK YEAH!)" : ""));
             put("text", lbTxt.toString());
-            put("mrkdwn_in", new ArrayList<String>() {{
+            put("mrkdwn_in", new ArrayList<String>()
+            {{
                 add("text");
             }});
         }});
@@ -117,7 +117,8 @@ public class StravaHandler implements Handler<JsonObject>
         SlashCommandResponse response = SlashCommandResponse.of(request);
         response.responseType = SlashCommandResponse.ResponseType.Ephemeral;
         response.responseText = "Unable to retrieve Strava details - raw message follows";
-        response.attachments.add(new HashMap<String, Object>() {{
+        response.attachments.add(new HashMap<String, Object>()
+        {{
             put("text", result.encode());
         }});
         SlackRunBot.vertx.eventBus().publish(SlackVerticle.OutboundSlashCommand, Json.objectToJsonObject(response));

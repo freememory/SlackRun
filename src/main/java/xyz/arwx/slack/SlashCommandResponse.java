@@ -1,7 +1,6 @@
 package xyz.arwx.slack;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonValue;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import org.slf4j.Logger;
@@ -20,6 +19,7 @@ import static xyz.arwx.slack.SlashCommandResponse.ResponseType.InChannel;
 public class SlashCommandResponse
 {
     private static Logger logger = LoggerFactory.getLogger(SlashCommandResponse.class);
+
     public enum ResponseType
     {
         @JsonProperty("ephemeral")
@@ -31,7 +31,7 @@ public class SlashCommandResponse
 
     @JsonProperty("response_type")
     public ResponseType responseType;
-    public String responseUrl;
+    public String       responseUrl;
 
     @JsonProperty("text")
     public String responseText;

@@ -6,6 +6,6 @@ package xyz.arwx.config;
 public class MasterConfig
 {
     public StravaConfig stravaConfig;
-    public SlackConfig slackConfig;
-    public MailConfig mailConfig;
+    public SlackConfig  slackConfig;
+    public MailConfig   mailConfig;
 }

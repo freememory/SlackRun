@@ -29,7 +29,7 @@ public class HttpVerticle extends AbstractVerticle
 
         Arrays.stream(request.split("&")).forEach(param -> {
             String[] split = param.split("=");
-            if(split.length != 2)
+            if (split.length != 2)
                 return;
 
             try
@@ -56,7 +56,7 @@ public class HttpVerticle extends AbstractVerticle
             logger.info("Request received: {}", r.encodePrettily());
             vertx.eventBus().publish(SlackVerticle.InboundSlashCommand, r);
             ctx.response().setStatusCode(200).putHeader("Content-Type", "application/json").end(new JsonObject().
-                    put("response_type", "in_channel").put("text", "").encode());
+                                                                                                                        put("response_type", "in_channel").put("text", "").encode());
         });
 
         server.requestHandler(router::accept).listen(8080);

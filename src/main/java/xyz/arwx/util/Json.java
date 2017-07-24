@@ -12,7 +12,7 @@ import java.io.IOException;
 public class Json
 {
     private        ObjectMapper mapper;
-    private static Json   instance;
+    private static Json         instance;
 
     private Json()
     {

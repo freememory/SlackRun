@@ -19,6 +19,7 @@ public class SlackRunBot
 {
     public static Vertx        vertx;
     public static MasterConfig config;
+
     public static void main(String[] args) throws InterruptedException
     {
         vertx = Vertx.vertx();

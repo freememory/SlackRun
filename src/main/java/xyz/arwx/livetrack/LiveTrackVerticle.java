@@ -2,7 +2,6 @@ package xyz.arwx.livetrack;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.eventbus.Message;
-import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.LocalMap;
@@ -27,8 +26,8 @@ import java.util.stream.Collectors;
  */
 public class LiveTrackVerticle extends AbstractVerticle
 {
-    private static final Logger logger = LoggerFactory.getLogger(LiveTrackVerticle.class);
-    public static final String InboundSlashCommand = "LiveTrackVerticle.Slack.Slash.In";
+    private static final Logger logger              = LoggerFactory.getLogger(LiveTrackVerticle.class);
+    public static final  String InboundSlashCommand = "LiveTrackVerticle.Slack.Slash.In";
     private LocalMap<String, JsonObject> slackUserMap;
     private Map<String, LiveTrackUser> nickToUserMap = new HashMap<>();
 
@@ -49,7 +48,7 @@ public class LiveTrackVerticle extends AbstractVerticle
     {
         JsonObject slashCommand = slashCommandMsg.body();
         String text = slashCommand.getString("text");
-        if(text != null && text.toLowerCase().equals("help"))
+        if (text != null && text.toLowerCase().equals("help"))
         {
             SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
             String email = "challenge.runbot+" + slashCommand.getString("user_name") + "@gmail.com";
@@ -67,7 +66,7 @@ public class LiveTrackVerticle extends AbstractVerticle
             return;
         }
 
-        if(text == null || text.length() == 0)
+        if (text == null || text.length() == 0)
         {
             List<LiveTrackUser> users = runningUsers();
             SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
@@ -89,7 +88,8 @@ public class LiveTrackVerticle extends AbstractVerticle
             scr.send(vertx);
 
             return;
-        } else
+        }
+        else
         {
             LiveTrackUser ltu = nickToUserMap.get(text);
             if (ltu == null)
@@ -128,7 +128,7 @@ public class LiveTrackVerticle extends AbstractVerticle
                         d.toHours(), d.minusHours(d.toHours()).toMinutes(),
                         d.minusMinutes(d.toMinutes()).getSeconds()),
                 bpm.intValue(),
-                ( metersPerSec * 60. * 60. ) / 1000.);
+                (metersPerSec * 60. * 60.) / 1000.);
     }
 
     public String getSessionInfoText(LiveTrackUser user)
@@ -144,7 +144,7 @@ public class LiveTrackVerticle extends AbstractVerticle
     public void onMonitorActivityTimer(Long timerId)
     {
         // Cull the list of dead and done users
-        nickToUserMap.entrySet().removeIf(e->e.getValue().isDone());
+        nickToUserMap.entrySet().removeIf(e -> e.getValue().isDone());
         Set<String> nicks = nickToUserMap.keySet();
         nicks.forEach(this::updateActivityStatus);
         nicks.forEach(this::updateTracklog);
@@ -173,7 +173,7 @@ public class LiveTrackVerticle extends AbstractVerticle
     private void updateActivityStatus(String nick)
     {
         LiveTrackUser ltu = nickToUserMap.get(nick);
-        if(ltu == null)
+        if (ltu == null)
             return;
 
         ltu.updateStatus();
@@ -184,22 +184,22 @@ public class LiveTrackVerticle extends AbstractVerticle
         JsonObject msg = emailMsg.body();
 
         // Is this from Garmin?
-        if(!msg.getString("from").toLowerCase().endsWith("@garmin.com"))
+        if (!msg.getString("from").toLowerCase().endsWith("@garmin.com"))
             return;
 
         // Is this sent to an address like challenge.runbot+YOURNICK@gmail.com?
         JsonArray to = msg.getJsonArray("to");
-        List<String> recipients = to.stream().map(String.class::cast).filter(s->s.toLowerCase().startsWith("challenge.runbot+")).collect(Collectors.toList());
-        if(recipients.size() == 0)
+        List<String> recipients = to.stream().map(String.class::cast).filter(s -> s.toLowerCase().startsWith("challenge.runbot+")).collect(Collectors.toList());
+        if (recipients.size() == 0)
             return;
 
         // Get the nicks
         String nick = null;
-        for(String recipient : recipients)
+        for (String recipient : recipients)
         {
             String lc = recipient.toLowerCase();
             String[] split = lc.split("@");
-            if(split.length != 2)
+            if (split.length != 2)
                 continue;
             String name = split[0];
             nick = name.replace("challenge.runbot+", "");
@@ -207,7 +207,7 @@ public class LiveTrackVerticle extends AbstractVerticle
 
         // Can we resolve this nick? If you're not in the Slack group, gtfo.
         JsonObject nickInfo = resolveNick(nick);
-        if(nickInfo == null)
+        if (nickInfo == null)
             return;
 
         // Get the sesh and token ids
@@ -216,7 +216,7 @@ public class LiveTrackVerticle extends AbstractVerticle
         Matcher m = p.matcher(body);
         Set<String> urls = new HashSet<>();
         String sesh = null, tok = null;
-        while(m.find())
+        while (m.find())
         {
             sesh = m.group(1);
             tok = m.group(2);
@@ -229,12 +229,12 @@ public class LiveTrackVerticle extends AbstractVerticle
     private JsonObject resolveNick(String nick)
     {
         JsonObject user = slackUserMap.get(nick);
-        if(user == null)
+        if (user == null)
         {
             Collection<JsonObject> members = slackUserMap.values();
-            for(JsonObject jso : members)
+            for (JsonObject jso : members)
             {
-                if(jso.getString("userId").equals(nick))
+                if (jso.getString("userId").equals(nick))
                 {
                     user = jso;
                     break;
