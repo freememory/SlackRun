@@ -154,9 +154,14 @@ public class LiveTrackUser
         failedFetches = 0;
         String status = obj.getString("sessionStatus");
         sessionInfo = obj;
-        if (!status.equals("InProgress") && trackStatus == InProgress)
+        if (!status.equals("InProgress") || (lastTracklog != null &&
+                lastTracklog.getJsonArray("events").contains("END")))
         {
-            announceEnd();
+            // If we're not in progress - don't announce the end
+            if(trackStatus == InProgress)
+                announceEnd();
+
+            // But always set us to done.
             trackStatus = Done;
         }
         else

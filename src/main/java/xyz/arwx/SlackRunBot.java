@@ -29,6 +29,5 @@ public class SlackRunBot
         vertx.deployVerticle(SlackVerticle.class.getName(), new DeploymentOptions().setConfig(Json.objectToJsonObject(config.slackConfig)));
         vertx.deployVerticle(MailVerticle.class.getName(), new DeploymentOptions().setConfig(Json.objectToJsonObject(config.mailConfig)).setWorker(true));
         vertx.deployVerticle(LiveTrackVerticle.class.getName());
-
     }
 }

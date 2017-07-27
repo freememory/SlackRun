@@ -1,6 +1,7 @@
 package xyz.arwx;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -55,8 +56,7 @@ public class HttpVerticle extends AbstractVerticle
             JsonObject r = decodeRequest(body);
             logger.info("Request received: {}", r.encodePrettily());
             vertx.eventBus().publish(SlackVerticle.InboundSlashCommand, r);
-            ctx.response().setStatusCode(200).putHeader("Content-Type", "application/json").end(new JsonObject().
-                                                                                                                        put("response_type", "in_channel").put("text", "").encode());
+            ctx.response().setStatusCode(200).putHeader("Content-Type", "application/json").end(new JsonObject().put("response_type", "in_channel").put("text", "").encode());
         });
 
         server.requestHandler(router::accept).listen(8080);
