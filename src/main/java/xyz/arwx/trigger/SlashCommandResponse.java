@@ -1,4 +1,4 @@
-package xyz.arwx.slack;
+package xyz.arwx.trigger;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.vertx.core.Vertx;
@@ -7,16 +7,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.arwx.util.Json;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import static xyz.arwx.slack.SlashCommandResponse.ResponseType.InChannel;
+import static xyz.arwx.trigger.SlashCommandResponse.ResponseType.Ephemeral;
+import static xyz.arwx.trigger.SlashCommandResponse.ResponseType.InChannel;
 
 /**
  * Created by macobas on 19/07/17.
  */
-public class SlashCommandResponse
+public class SlashCommandResponse extends TriggerResponse
 {
     private static Logger logger = LoggerFactory.getLogger(SlashCommandResponse.class);
 
@@ -31,13 +28,6 @@ public class SlashCommandResponse
 
     @JsonProperty("response_type")
     public ResponseType responseType;
-    public String       responseUrl;
-
-    @JsonProperty("text")
-    public String responseText;
-
-    @JsonProperty("attachments")
-    public List<Map<String, Object>> attachments = new ArrayList<>();
 
     public static SlashCommandResponse of(JsonObject request)
     {
@@ -45,6 +35,19 @@ public class SlashCommandResponse
         response.responseUrl = request.getString("response_url");
         response.responseType = InChannel;
         return response;
+    }
+
+    @Override
+    public SlashCommandResponse setIsError(boolean error)
+    {
+        responseType = error ? Ephemeral : InChannel;
+        return this;
+    }
+
+    @Override
+    public String responseUrl()
+    {
+        return responseUrl;
     }
 
     public void send(Vertx vx)

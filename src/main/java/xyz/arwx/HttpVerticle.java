@@ -1,10 +1,10 @@
 package xyz.arwx;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +51,7 @@ public class HttpVerticle extends AbstractVerticle
         server = vertx.createHttpServer();
         router = Router.router(vertx);
         router.route("/slack").handler(BodyHandler.create());
-        router.post("/slack").handler(ctx -> {
+        router.post("/slack").consumes("*/x-www-form-urlencoded").handler(ctx -> {
             String body = ctx.getBodyAsString();
             JsonObject r = decodeRequest(body);
             logger.info("Request received: {}", r.encodePrettily());
@@ -59,6 +59,29 @@ public class HttpVerticle extends AbstractVerticle
             ctx.response().setStatusCode(200).putHeader("Content-Type", "application/json").end(new JsonObject().put("response_type", "in_channel").put("text", "").encode());
         });
 
+        router.post("/slack").consumes("*/json").handler(ctx -> {
+            JsonObject body = ctx.getBodyAsJson();
+            logger.info("JSON received: {}", body.encodePrettily());
+            handleEvent(ctx, body);
+        });
+
         server.requestHandler(router::accept).listen(8080);
+    }
+
+    private void handleEvent(RoutingContext ctx, JsonObject body)
+    {
+        // Immediately ACK events. If it's a URL verify request, respond in kind.
+        String type = body.getString("type");
+        JsonObject response = new JsonObject();
+        if (type != null && type.equals("url_verification"))
+        {
+            response.put("challenge", body.getString("challenge"));
+        }
+        else if (body.getJsonObject("event") != null)
+        {
+            vertx.eventBus().publish(SlackVerticle.InboundEvent, body);
+        }
+        ctx.response().setStatusCode(200).putHeader("Content-Type", "application/json")
+           .end(response.encode());
     }
 }

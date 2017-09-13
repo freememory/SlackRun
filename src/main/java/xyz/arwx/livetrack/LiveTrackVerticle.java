@@ -9,7 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.arwx.mail.MailVerticle;
 import xyz.arwx.slack.SlackVerticle;
-import xyz.arwx.slack.SlashCommandResponse;
+import xyz.arwx.trigger.TriggerCommand;
+import xyz.arwx.trigger.TriggerResponse;
 import xyz.arwx.util.Json;
 
 import java.time.Duration;
@@ -46,14 +47,17 @@ public class LiveTrackVerticle extends AbstractVerticle
 
     public void onSlashCommand(Message<JsonObject> slashCommandMsg)
     {
-        JsonObject slashCommand = slashCommandMsg.body();
-        String text = slashCommand.getString("text");
+        TriggerCommand trigger = Json.objectFromJsonObject(slashCommandMsg.body(), TriggerCommand.class);
+        String text = trigger.text;
+
         if (text != null && text.toLowerCase().equals("help"))
         {
-            SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-            String email = "challenge.runbot+" + slashCommand.getString("user_name") + "@gmail.com";
-            scr.responseType = SlashCommandResponse.ResponseType.Ephemeral;
-            scr.responseText = "Use /livetrack with no options to see who's currently running, and where they are.\n" +
+            TriggerResponse resp = trigger.makeReply();
+            JsonObject nickInfo = resolveNick(trigger.user);
+            String email = "challenge.runbot+" + nickInfo.getString("nick") + "@gmail.com";
+            // It's not REALLY an error - but we don't want to make noise with it.
+            resp.setIsError(true);
+            resp.responseText = "Use /livetrack with no options to see who's currently running, and where they are.\n" +
                     "Use /livetrack <nick> to see some more detailed output for the specific person who's running.\n\n" +
                     "If you own a Garmin appliance that can use the LiveConnect feature, you can be tracked by me. Set up is as follows:\n " +
                     "1. Go into Garmin Connect on your phone.\n" +
@@ -62,15 +66,15 @@ public class LiveTrackVerticle extends AbstractVerticle
                     "4. Turn on E-mail for Share Session.\n" +
                     String.format("5. Add the following address to the list of recipients: <mailto:%s|%s>\n", email, email) +
                     "6. That's it. Now when you start running, your e-mail will be sent to the bot. You can add other recipients as well; each person gets an individual e-mail.";
-            vertx.eventBus().publish(SlackVerticle.OutboundSlashCommand, Json.objectToJsonObject(scr));
+            resp.send(vertx);
             return;
         }
 
         if (text == null || text.length() == 0)
         {
             List<LiveTrackUser> users = runningUsers();
-            SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-            scr.responseText = String.format("%d users total currently running", users.size());
+            TriggerResponse resp = trigger.makeReply();
+            resp.responseText = String.format("%d users total currently running", users.size());
 
             HashMap<String, Object> attachments = new HashMap<>();
             attachments.put("color", "#36a64f");
@@ -84,8 +88,8 @@ public class LiveTrackVerticle extends AbstractVerticle
             }
 
             attachments.put("text", runnersTxt.toString());
-            scr.attachments.add(attachments);
-            scr.send(vertx);
+            resp.attachments.add(attachments);
+            resp.send(vertx);
 
             return;
         }
@@ -94,23 +98,21 @@ public class LiveTrackVerticle extends AbstractVerticle
             LiveTrackUser ltu = nickToUserMap.get(text);
             if (ltu == null)
             {
-                SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-                scr.responseText = "I don't know who that user is - try again.";
-                scr.responseType = SlashCommandResponse.ResponseType.Ephemeral;
-                scr.send(vertx);
+                trigger.makeReply()
+                       .setResponseText("I don't know who that user is - try again.")
+                       .setIsError(true)
+                       .send(vertx);
             }
             else
             {
                 String shortText = getSessionInfoText(ltu);
                 String tlText = getTrackLogText(ltu);
-                SlashCommandResponse scr = SlashCommandResponse.of(slashCommand);
-                scr.responseText = shortText;
-                scr.attachments.add(new HashMap<String, Object>()
-                {{
-                    put("text", tlText);
-                }});
-
-                scr.send(vertx);
+                trigger.makeReply()
+                       .setResponseText(shortText)
+                       .addAttachment(new HashMap<String, Object>()
+                       {{
+                           put("text", tlText);
+                       }}).send(vertx);
             }
         }
     }

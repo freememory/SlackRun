@@ -14,8 +14,12 @@ import xyz.arwx.SlackRunBot;
 import xyz.arwx.config.SlackConfig;
 import xyz.arwx.livetrack.LiveTrackVerticle;
 import xyz.arwx.strava.StravaHandler;
+import xyz.arwx.trigger.SlashCommandResponse;
+import xyz.arwx.trigger.TextTriggerCommand;
+import xyz.arwx.trigger.TriggerCommand;
 import xyz.arwx.util.Json;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,12 +29,14 @@ import java.util.Map;
 public class SlackVerticle extends AbstractVerticle
 {
     private SlackConfig config;
-    private              Map<String, Handler<JsonObject>> slashHandlers = new HashMap<>();
-    private static final Logger                           logger        = LoggerFactory.getLogger(SlackVerticle.class);
+    private              Map<String, Handler<TriggerCommand>> slashHandlers = new HashMap<>();
+    private static final Logger                               logger        = LoggerFactory.getLogger(SlackVerticle.class);
     private LocalMap<String, JsonObject> slackUserMap;
 
     // Requests come here
     public static final String InboundSlashCommand  = "Slack.Slash.In";
+    public static final String InboundEvent         = "Slack.Event.In";
+    public static final String GetHandlerList       = "SlackVerticle.GetHandlerList";
     // Replies go here
     public static final String OutboundSlashCommand = "Slack.Slash.Out";
     public static final String OutboundAnnounce     = "Slack.Announce.Out";
@@ -46,8 +52,37 @@ public class SlackVerticle extends AbstractVerticle
         vertx.eventBus().consumer(InboundSlashCommand, this::onSlashCommand);
         vertx.eventBus().consumer(OutboundSlashCommand, this::onSlashReply);
         vertx.eventBus().consumer(OutboundAnnounce, this::onOutboundAnnounce);
+        vertx.eventBus().consumer(InboundEvent, this::onInboundEvent);
+        vertx.eventBus().consumer(GetHandlerList, this::getHandlers);
         vertx.setPeriodic(60 * 5 * 1000, this::onUserNameTimer);
         fetchUsers();
+    }
+
+    private void onInboundEvent(Message<JsonObject> message)
+    {
+        JsonObject body = message.body();
+        if (!body.getJsonObject("event").getString("type").equals("message"))
+            return;
+        body.put("type", "text");
+        // TRIGGER WARNING. lolz.
+        String text = body.getJsonObject("event").getString("text");
+        if (!text.startsWith(config.textTriggerPrefix))
+            return;
+
+        String replaced = text.replaceFirst("!", "/");
+        String[] split = replaced.split(" ");
+        body.put("command", split[0]);
+        body.getJsonObject("event").put("text", String.join(" ", Arrays.asList(split).subList(1, split.length)));
+        TextTriggerCommand ttc = (TextTriggerCommand) Json.objectFromJsonObject(body, TriggerCommand.class);
+        ttc.setPostAuthToken(config.botUserAuthToken);
+        handleTheCommand(ttc);
+    }
+
+    private void getHandlers(Message msg)
+    {
+        JsonArray ret = new JsonArray();
+        slashHandlers.keySet().forEach(ret::add);
+        msg.reply(ret);
     }
 
     private void onOutboundAnnounce(Message<JsonObject> msg)
@@ -114,34 +149,21 @@ public class SlackVerticle extends AbstractVerticle
         JsonObject event = msg.body();
         if (!event.getString("token").equals(config.verificationToken))
             throw new RuntimeException("Bad token - does not match verificaiton token?");
+        event.put("type", "slash");
+        handleTheCommand(Json.objectFromJsonObject(event, TriggerCommand.class));
+    }
 
-        slashHandlers.getOrDefault(event.getString("command"), v -> {
-            SlashCommandResponse scr = SlashCommandResponse.of(event);
-            scr.responseText = "Err, I didn't quite get that?";
-            vertx.eventBus().publish(SlackVerticle.OutboundSlashCommand, Json.objectToJsonObject(scr));
-        }).handle(event);
+    public void handleTheCommand(TriggerCommand command)
+    {
+        slashHandlers.getOrDefault(command.trigger, v -> {
+            command.makeReply().setResponseText("Err, I didn't quite get that?").setIsError(true).send(vertx);
+        }).handle(command);
     }
 
     public void registerHandlers()
     {
         slashHandlers.put("/strava", new StravaHandler(SlackRunBot.config.stravaConfig));
-        slashHandlers.put("/livetrack", jso -> vertx.eventBus().publish(LiveTrackVerticle.InboundSlashCommand, jso));
-        //slashHandlers.put("/botstat", this::statHandler);
-        //slashHandlers.put("/8ball", this::fortuneHandler);
-    }
-
-    private void fortuneHandler(JsonObject entries)
-    {
-
-    }
-
-    private void statHandler(JsonObject entries)
-    {
-
-    }
-
-    private void stravaHandler(JsonObject entries)
-    {
-        // right now just handle the naked Strava command
+        slashHandlers.put("/livetrack", triggerCommand -> vertx.eventBus().publish(LiveTrackVerticle.InboundSlashCommand,
+                Json.objectToJsonObject(triggerCommand)));
     }
 }

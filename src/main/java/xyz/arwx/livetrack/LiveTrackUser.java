@@ -158,7 +158,7 @@ public class LiveTrackUser
                 lastTracklog.getJsonArray("events").contains("END")))
         {
             // If we're not in progress - don't announce the end
-            if(trackStatus == InProgress)
+            if (trackStatus == InProgress)
                 announceEnd();
 
             // But always set us to done.

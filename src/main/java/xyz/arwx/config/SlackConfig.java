@@ -10,4 +10,6 @@ public class SlackConfig
     public String verificationToken;
     public String oauthToken;
     public String webhookUrl;
+    public String botUserAuthToken;
+    public String textTriggerPrefix;
 }
