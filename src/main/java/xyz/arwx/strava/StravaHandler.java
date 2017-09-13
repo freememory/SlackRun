@@ -14,6 +14,7 @@ import xyz.arwx.trigger.TriggerResponse;
 import java.text.MessageFormat;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 
 import static io.vertx.core.http.HttpMethod.GET;
@@ -66,6 +67,15 @@ public class StravaHandler implements Handler<TriggerCommand>
         String text = request.text;
         Units uconv = Units.of(text != null && text.toLowerCase().contains("murica") ? Imperial : Metric);
 
+        String sortBy = "distance";
+
+        if(text.toLowerCase().contains("elev"))
+            sortBy = "elev_gain";
+        else if(text.toLowerCase().contains("pace"))
+            sortBy = "pace";
+        else
+            sortBy = "distance";
+
         StringBuffer responseText = new StringBuffer();
         responseText.append(String.format("<http://www.strava.com/clubs/%s|%s>: %s club with %d members\n", clubInfo.getString("url"), clubInfo.getString("name"),
                 clubInfo.getString("sport_type"),
@@ -74,12 +84,22 @@ public class StravaHandler implements Handler<TriggerCommand>
                 uconv.getDistance(clubLeaderBoard.getJsonObject(clubLeaderBoard.size() - 1).getDouble("distance")), uconv.distanceUnit().abbrev(),
                 uconv.getDistance(clubLeaderBoard.getJsonObject(0).getDouble("distance")), uconv.distanceUnit().abbrev()));
 
+        clubLeaderBoard.forEach(o -> {
+            JsonObject jso = (JsonObject)o;
+            jso.put("pace", jso.getInteger("moving_time") / uconv.getDistance(jso.getDouble("distance")));
+        });
+
+        final String sortParam = sortBy;
+        clubLeaderBoard.getList().sort((a,b) -> (int)(((JsonObject)b).getDouble(sortParam) - ((JsonObject)a).getDouble(sortParam)));
+        if(sortParam.equals("pace"))
+            Collections.reverse(clubLeaderBoard.getList());
+
         StringBuffer lbTxt = new StringBuffer();
         for (int i = 0; i < Math.min(clubLeaderBoard.size(), 10); i++)
         {
             JsonObject lbEntry = clubLeaderBoard.getJsonObject(i);
             Duration d = Duration.ofSeconds(lbEntry.getInteger("moving_time"));
-            Duration perK = Duration.ofSeconds(new Double(lbEntry.getInteger("moving_time") / uconv.getDistance(lbEntry.getDouble("distance"))).longValue());
+            Duration perK = Duration.ofSeconds(lbEntry.getDouble("pace").longValue());
 
             lbTxt.append(String.format("%d. *%s %s*: %.2f %s (^%.2f %s) in %s (%s/%s)\n",
                     i + 1,
