@@ -66,7 +66,7 @@ public class SlackVerticle extends AbstractVerticle
         body.put("type", "text");
         // TRIGGER WARNING. lolz.
         String text = body.getJsonObject("event").getString("text");
-        if (!text.startsWith(config.textTriggerPrefix))
+        if (text == null || !text.startsWith(config.textTriggerPrefix))
             return;
 
         String replaced = text.replaceFirst("!", "/");
