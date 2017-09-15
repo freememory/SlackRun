@@ -68,13 +68,15 @@ public class StravaHandler implements Handler<TriggerCommand>
         Units uconv = Units.of(text != null && text.toLowerCase().contains("murica") ? Imperial : Metric);
 
         String sortBy = "distance";
-
-        if(text.toLowerCase().contains("elev"))
-            sortBy = "elev_gain";
-        else if(text.toLowerCase().contains("pace"))
-            sortBy = "pace";
-        else
-            sortBy = "distance";
+        if(text != null)
+        {
+            if (text.toLowerCase().contains("elev"))
+                sortBy = "elev_gain";
+            else if (text.toLowerCase().contains("pace"))
+                sortBy = "pace";
+            else
+                sortBy = "distance";
+        }
 
         StringBuffer responseText = new StringBuffer();
         responseText.append(String.format("<http://www.strava.com/clubs/%s|%s>: %s club with %d members\n", clubInfo.getString("url"), clubInfo.getString("name"),
