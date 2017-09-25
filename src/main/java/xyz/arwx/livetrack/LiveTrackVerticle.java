@@ -146,7 +146,7 @@ public class LiveTrackVerticle extends AbstractVerticle
     public void onMonitorActivityTimer(Long timerId)
     {
         // Cull the list of dead and done users
-        nickToUserMap.entrySet().removeIf(e -> e.getValue().isDone());
+        nickToUserMap.entrySet().removeIf(e -> e.getValue().isPurgeable());
         Set<String> nicks = nickToUserMap.keySet();
         nicks.forEach(this::updateActivityStatus);
         nicks.forEach(this::updateTracklog);

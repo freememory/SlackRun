@@ -21,6 +21,7 @@ public class LiveTrackUser
     {
         StartedNotAnnounced,
         InProgress,
+        DoneNotAnnounced,
         Done,
         Dead
     }
@@ -124,6 +125,8 @@ public class LiveTrackUser
     {
         JsonObject lastLog = objects.getJsonObject(objects.size() - 1);
         lastTracklog = lastLog;
+        if(lastTracklog.getJsonArray("events").contains("END"))
+            announceEnd();
     }
 
     public void updateStatus()
@@ -143,9 +146,21 @@ public class LiveTrackUser
                          }).end();
     }
 
+    public boolean isPurgeable()
+    {
+        switch(trackStatus)
+        {
+            case Done:
+            case Dead:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public boolean isDone()
     {
-        return trackStatus == Dead || trackStatus == Done;
+        return isPurgeable() || trackStatus == DoneNotAnnounced;
     }
 
     private void handleStatus(JsonObject obj)
@@ -154,15 +169,11 @@ public class LiveTrackUser
         failedFetches = 0;
         String status = obj.getString("sessionStatus");
         sessionInfo = obj;
-        if (!status.equals("InProgress") || (lastTracklog != null &&
-                lastTracklog.getJsonArray("events").contains("END")))
+        if (!status.equals("InProgress"))
         {
             // If we're not in progress - don't announce the end
             if (trackStatus == InProgress)
-                announceEnd();
-
-            // But always set us to done.
-            trackStatus = Done;
+                trackStatus = DoneNotAnnounced;
         }
         else
         {
@@ -182,7 +193,8 @@ public class LiveTrackUser
 
     public void announceEnd()
     {
-        Duration d = Duration.ofMillis(sessionInfo.getInteger("endTime") - sessionInfo.getInteger("startTime"));
+        Duration d = Duration.ofMillis(new Double(Double.parseDouble(lastTracklog.getJsonObject("metaData").getString("TOTAL_DURATION"))).longValue());
+        trackStatus = Done;
         SlackRunBot.vertx.eventBus().publish(SlackVerticle.OutboundAnnounce, new JsonObject()
                 .put("text", String.format("<@%s|%s> has completed a LiveTrack activity!\nTotal time: %s, total distance: %.2f km",
                         userInfo.getString("userId"),
