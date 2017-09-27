@@ -124,8 +124,18 @@ public class LiveTrackUser
     private void handleTracklog(JsonArray objects)
     {
         JsonObject lastLog = objects.getJsonObject(objects.size() - 1);
-        lastTracklog = lastLog;
-        if(lastTracklog.getJsonArray("events").contains("END"))
+
+        // If we've been paused, don't update the trackLog.
+        if(lastTracklog == null || trackStatus == DoneNotAnnounced ||
+            (!lastLog.getJsonObject("metaData").getString("TOTAL_DURATION")
+            .equals(lastTracklog.getJsonObject("metaData").getString("TOTAL_DURATION")) ||
+            !lastLog.getJsonArray("events").equals(lastTracklog.getJsonArray("events"))))
+            lastTracklog = lastLog;
+
+        // If you've been paused for 30 minutes, or we contain an END event or we're expired
+        if(System.currentTimeMillis() - lastTracklog.getLong("timestamp") > 30 * 60 * 1000 ||
+                lastTracklog.getJsonArray("events").contains("END") ||
+                trackStatus == DoneNotAnnounced)
             announceEnd();
     }
 

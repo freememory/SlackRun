@@ -19,31 +19,29 @@ import javax.mail.event.MessageCountAdapter;
 import javax.mail.event.MessageCountEvent;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.search.FlagTerm;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.time.*;
+import java.time.temporal.TemporalUnit;
+import java.util.*;
 
 public class MailVerticle extends AbstractVerticle
 {
     public static final  String OutboundAddress = MailVerticle.class.getName() + ".NewMail";
     private static final Logger logger          = LoggerFactory.getLogger(MailVerticle.class);
     private MailConfig config;
-    private IdleThread idleRunner;
-    private Thread     idleThread;
 
     public void start()
     {
         logger.info("Starting MailVerticle");
         config = Json.objectFromJsonObject(config(), MailConfig.class);
-        try
-        {
-            startMailThreads();
-        }
-        catch (MessagingException e)
-        {
-            e.printStackTrace();
-        }
+        vertx.setPeriodic(120 * 1000, l -> {
+            try {
+                pollMail();
+            } catch (MessagingException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     private String getTextFromMessage(Message message) throws MessagingException, IOException
@@ -63,7 +61,11 @@ public class MailVerticle extends AbstractVerticle
             MimeMultipart mimeMultipart = (MimeMultipart) message.getContent();
             result = getTextFromMimeMultipart(mimeMultipart);
         }
-
+        else
+        {
+            // just mark it read
+            message.getContent();
+        }
         return result;
     }
 
@@ -114,121 +116,56 @@ public class MailVerticle extends AbstractVerticle
         return ret;
     }
 
-    private void startMailThreads() throws MessagingException
+    private void pollMail() throws MessagingException
     {
+        logger.info("Polling inbox");
         Session sesh = getMailSession();
         IMAPStore store = null;
         Folder inbox = null;
 
         store = (IMAPStore) sesh.getStore("imaps");
         store.connect(config.userName, config.password);
-
-        if (!store.hasCapability("IDLE"))
-            throw new RuntimeException("IDLE not supported");
-
         inbox = (IMAPFolder) store.getFolder("INBOX");
-        inbox.addMessageCountListener(new MessageCountAdapter()
-        {
-            @Override
-            public void messagesAdded(MessageCountEvent event)
-            {
-                Message[] messages = event.getMessages();
-                for (Message message : messages)
-                {
-                    try
-                    {
-                        JsonObject msg = new JsonObject()
-                                .put("from", ((InternetAddress) message.getFrom()[0]).getAddress())
-                                .put("to", new JsonArray(getToList(message)))
-                                .put("subject", message.getSubject())
-                                .put("body", getTextFromMessage(message));
-                        vertx.eventBus().publish(MailVerticle.OutboundAddress, msg);
-                    }
-                    catch (MessagingException | IOException e)
-                    {
-                        e.printStackTrace();
-                    }
-                }
+        if(inbox == null || !inbox.exists())
+            throw new RuntimeException("Can't connect to INBOX");
+        inbox.open(Folder.READ_WRITE);
+        // Only pull unread
+        FlagTerm ft = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
+        Message[] messages = inbox.search(ft);
+        // Sort messages from recent to oldest
+        Arrays.sort(messages, (m1, m2 ) -> {
+            try {
+                return m2.getSentDate().compareTo(m1.getSentDate());
+            } catch (MessagingException e) {
+                throw new RuntimeException(e);
             }
         });
-
-        idleRunner = new IdleThread(inbox, config);
-        idleThread = new Thread(idleRunner);
-        idleThread.setDaemon(false);
-        idleThread.start();
-    }
-
-    private static class IdleThread implements Runnable
-    {
-        private Folder     folder;
-        private MailConfig mailConfig;
-        private volatile     boolean running = true;
-        private static final Logger  logger  = LoggerFactory.getLogger(IdleThread.class);
-
-        IdleThread(Folder f, MailConfig mc)
+        for (Message message : messages)
         {
-            folder = f;
-            mailConfig = mc;
-        }
-
-        public synchronized void kill()
-        {
-            if (!running)
-                return;
-            this.running = false;
-        }
-
-        @Override
-        public void run()
-        {
-            while (running)
+            try
             {
-                try
-                {
-                    ensureOpen();
-                    logger.info("Enter idle");
-                    ((IMAPFolder) folder).idle();
-                }
-                catch (Exception e)
-                {
-                    // something went wrong
-                    // wait and try again
-                    e.printStackTrace();
-                    try
-                    {
-                        Thread.sleep(100);
-                    }
-                    catch (InterruptedException e1)
-                    {
-                        // ignore
-                    }
-                }
+                JsonObject msg = new JsonObject()
+                        .put("from", ((InternetAddress) message.getFrom()[0]).getAddress())
+                        .put("to", new JsonArray(getToList(message)))
+                        .put("subject", message.getSubject())
+                        .put("body", getTextFromMessage(message));
+
+                if(message.getSentDate().before(Date.from(Instant.now().minus(Duration.ofHours(2)))))
+                    continue;
+                logger.info("Found potentially interesting mail message. From={}, To={}, Subject={}",
+                        msg.getString("from"), msg.getJsonArray("to").encode(), msg.getString("subject"));
+                vertx.eventBus().publish(MailVerticle.OutboundAddress, msg);
+            }
+            catch (MessagingException | IOException e)
+            {
+                e.printStackTrace();
             }
         }
 
-        public void ensureOpen() throws MessagingException
-        {
-            if (folder != null)
-            {
-                Store store = folder.getStore();
-                if (store != null && !store.isConnected())
-                {
-                    store.connect(mailConfig.userName, mailConfig.password);
-                }
-            }
-            else
-            {
-                throw new MessagingException("Unable to open a null folder");
-            }
-
-            if (folder.exists() && !folder.isOpen() && (folder.getType() & Folder.HOLDS_MESSAGES) != 0)
-            {
-                logger.info("Open folder {}", folder.getFullName());
-                folder.open(Folder.READ_ONLY);
-                if (!folder.isOpen())
-                    throw new MessagingException("Unable to open folder " + folder.getFullName());
-            }
-        }
+        logger.info("Done polling, {} messages retrieved", messages.length);
+        inbox.setFlags(messages, new Flags(Flags.Flag.SEEN), true);
+        inbox.close(false);
+        store.close();
     }
 
     private Session getMailSession()
@@ -241,4 +178,3 @@ public class MailVerticle extends AbstractVerticle
         return emailSession;
     }
 }
-
